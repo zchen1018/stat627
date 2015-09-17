@@ -1,0 +1,73 @@
+---
+title: "[Homework1](http://stat545-ubc.github.io/hw02_explore-gapminder-use-rmarkdown.html) for Stat627"
+output: html_document
+---
+### Zhuangye Chen
+#### Bring rectangular data in
+```{r}
+# read with 2 functions
+gapminder <- read.delim("http://www.stat.ubc.ca/~jenny/notOcto/STAT545A/examples/gapminder/data/gapminderDataFiveYear.txt")
+#gapminder2 <- read.table("http://www.stat.ubc.ca/~jenny/notOcto/STAT545A/examples/gapminder/data/gapminderDataFiveYear.txt")
+# the above line will throw an error
+gapminder2 <- read.table("http://www.stat.ubc.ca/~jenny/notOcto/STAT545A/examples/gapminder/data/gapminderDataFiveYear.txt", header = TRUE, fill = TRUE, sep = "\t", quote = "\"", comment.char = "")
+identical(gapminder, gapminder2)
+```
+By default, read.table() will set the field separator character argument ("sep") equals to 'white space' (""). In line 146, the name of the country is "Bosnia and Herzegovina" and read.table() will separate these 3 words and assign them to 3 different variables. R expects each row to have the same number of elements, but line 146 has more than 6 elements, thus R will throw an error saying that "line 146 did not have 6 elements".
+
+To make read.table() equivalent to read.delim(), you just go through all arguments setting of read.delim() and modify those of read.table() to be the same as in read.delim().
+
+#### Smell test the data
+```{r}
+# Explore your new data.frame.
+str(gapminder)
+# storage mode of "gapminder"
+mode(gapminder)
+class(gapminder)
+dim(gapminder)
+# another way to get # of variables
+length(names(gapminder))
+# another way to get # of rows
+length(gapminder$country)
+```
+It is a "data.frame" with 1706 rows of 6 variables, the mode of it is `r mode(gapminder)` and its class is `r class(gapminder)`.
+
+When there are missing values in the data frame, just using the dim() function may not give you the real "extent" because some of the cells in the data frame is null. In such case, it is useful to use length() function to check on each variable.
+
+"country" is a factor variable with 142 levels of different countries. "year" is the integer indicating the time of the observation. "continent" is the other factor variable that suggests the continent of that country. "pop", "LifeExp" and "gpdPercap" are three numric varialbes that stand for population, Life Expectance and expetancy and GDP per capita.
+
+
+#### Explore individual variables
+```{r}
+# choose "continent" as the categorical variable and "lifeExp" as the quantitiative one
+continent <- gapminder$continent
+LifeExp <- gapminder$lifeExp
+unique(continent)
+table(continent)/12 # Data is from 12 separate years
+quantile(LifeExp)
+# the typical refers to the mode (value with the most count)
+# define a function to find the mode in a vector
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+Mode(continent)
+Mode(LifeExp)
+# spread refers to the range statistics and it only applies for numerical variable
+max(LifeExp) - min(LifeExp)
+```
+Thus, for "continent", the value "`r Mode(continent)`" is typical and for "lifeExp", `r Mode(LifeExp)` is typical. What's more, the spread of "lifeExp" is `r max(LifeExp) - min(LifeExp)`.
+
+
+```{r}
+hist(LifeExp, breaks = 30)
+boxplot(LifeExp ~ year, data = gapminder, main = "Boxplot of LifeExp conditioning on Year")
+```
+
+From the frequency table of "continent" variable, "Africa" has the most count and "Oceania" is the rarest. By the histogram of "LifeExp", it seems to be a bimodal distribution with two peaks at around 45 and 71. However, note that there are data from 12 different years, so just looking at the whole data set does not make much sense. Futhermore, if we condition on year, there is an obvious increasing trend in life expectancy over years. 
+```{r}
+data2007 <- subset(gapminder, subset = year == 2007)
+boxplot(lifeExp ~ continent, data = data2007, main = "Boxplot of LifeExp of different continents in 2007")
+```
+
+
+Thus, we choose data from 2007 and make a boxplot of life expectancy of different continents. By the boxplot, it is still easy to notice that there is a huge gap in life expectancy between Africa and other continents.
