@@ -1,7 +1,5 @@
----
-title: "[Homework1](http://stat545-ubc.github.io/hw02_explore-gapminder-use-rmarkdown.html) for Stat627"
-output: html_document
----
+### [Homework1](http://stat545-ubc.github.io/hw02_explore-gapminder-use-rmarkdown.html) for Stat627
+
 ### Zhuangye Chen
 #### Bring rectangular data in
 ```{r}
