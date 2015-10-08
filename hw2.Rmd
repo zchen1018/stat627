@@ -1,0 +1,89 @@
+### Homework2, Stat 627
+### Zhuangye Chen
+```{r}
+# Load the packages and read in the data
+suppressPackageStartupMessages(library(plyr))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(tidyr))
+gapminder <- read.delim("http://www.stat.ubc.ca/~jenny/notOcto/STAT545A/examples/gapminder/data/gapminderDataFiveYear.txt")
+str(gapminder)
+```
+Note that there are 142 rows for a year and there are 12 years in total.
+
+### Part 1
+#### Task1: Get the maximum and minimum of GDP per capita for all continents.
+```{r task1}
+gapminder %>% group_by(continent) %>% summarise(min(gdpPercap), max(gdpPercap))
+```
+
+#### Task2: Look at the spread of GDP per capita within the continents.
+```{r taks2}
+gapminder %>% group_by(continent) %>% summarise(var(gdpPercap))
+```
+
+#### Task3: Compute a weighted mean for different years, weighting by population.
+```{r task3, fig.height = 3, fig.width = 5, fig.align='center'}
+# A data.frame to store the year and the weighted mean
+weightedLifeExpMean <- data.frame("year" = unique(gapminder$year),
+                                  "WeightedLifeExpMean" = numeric(12))
+j = 1
+for (i in unique(gapminder$year)) {
+  dataOfYear <- select(filter(gapminder, year == i), pop, lifeExp)
+  weightedLifeExpMean$WeightedLifeExpMean[j] <- (dataOfYear %>% summarize(sum(pop*lifeExp) / sum(pop)))[[1]]
+  j = j+1
+}
+weightedLifeExpMean
+# A plot to show the points and a regression funciton to show the trend
+g <- ggplot(weightedLifeExpMean, aes(x = year, y = WeightedLifeExpMean))
+g + geom_point(size = 3.5) + geom_smooth(method = lm) + ggtitle("Weighted Life Expectance Over Years")
+```
+
+From the plot we can see that there is an obvious increasing trend in weighted life expectance (weighted by population) over years.
+
+#### Task4: How is life expectancy changing over time on different continents?
+Calculate the meadian of life expectancy for each continent over years. The reason I choose median here is that mean is largely influenced by outliers and by the plots below we can see that there are quite a few outliers there.
+```{r task4 data}
+LEmedian <- gapminder %>% group_by(continent, year) %>% summarise(median(lifeExp))
+# Use "spread" function from tidyr package to reshape the data to a wide form
+LEwide <- spread(LEmedian, key = year, value = "median(lifeExp)")
+# The data if too wide (13 columns in total) to display fully, just display the first 4 and last 4 years
+LEwide[, c(1:5, (dim(LEwide)[2]-3):dim(LEwide)[2])]
+```
+It is better to answer this question with the plot.
+```{r task4 plot, fig.height = 6, fig.width = 7, fig.align='center'}
+# Refactorize 'continent' variable for a better order in facettting
+gapminder$continent <- factor(gapminder$continent, levels = c("Europe", "Americas", "Asia", "Africa", "Oceania"))
+t1 <- filter(gapminder, continent %in% c('Europe', 'Americas')) %>% ggplot(aes(x = factor(year), y = lifeExp))
+t1 + geom_boxplot() + coord_flip() + facet_grid(continent~.) + ylim(20, 85)
+t2 <- filter(gapminder, continent %in% c('Asia', 'Africa', 'Oceania')) %>% ggplot(aes(x = factor(year), y = lifeExp))
+t2 + geom_boxplot() + coord_flip() + facet_grid(continent~.) + ylim(20, 85)
+
+```
+
+First of all, all 5 continents witnessed an increase in life expectancy over years. The median of life expectancy of Africa increased from `r LEwide[1,2]` to `r LEwide[1, 13]`, Americas from `r LEwide[2,2]` to `r LEwide[2, 13]` and so on.
+
+Second, 'Oceania' has the highest median life expectancy in all years. But since there are two countries in that continent (Australia and New Zealand), I will focus more on other continents. Among continents other than Oceania, Europe has the largest median and Americas has the second largest. However, Asia is catching up real quickly. The difference in the median of life expectancy between Americas and Asia decreased from `r LEwide[2,2] - LEwide[3,2]` in 1953 to `r LEwide[2,13] - LEwide[3,13]` in 2007. 
+
+Third, though there is an obvious increase in Africa, its median in 2007 is still low (`r LEwide[1, 13]`), which is Americas' median before 1952 and less than Asia's median in 1976 (`r LEwide[3, 5]`). To live a healthy life is still a big problem there.
+
+### Part 2
+#### Task: Write a function to compute something interesting on a piece of the Gapminder data. 
+Make it something you can’t easily do with built-in functions. Make it something that’s not trivial to do with the simple dplyr verbs.
+Funtion: Fit a linear regression of life expectancy on year, find the largest standard residual of the fit. Return the year if its residual is greater than 2, return NULL if not.
+```{r p2}
+bigRes <- function(data, offset = 1952) {
+  lmfit <- lm(lifeExp ~ I(year - offset), data)
+  absRes <- abs(rstandard(lmfit))
+  if (max(absRes) > 2) {
+    return(data$year[which.max(absRes)])
+  } else {
+    return(NULL)
+  }
+}
+countryOutlierYear <- ddply(gapminder, ~ country, bigRes)
+str(countryOutlierYear)
+head(countryOutlierYear)
+tail(countryOutlierYear)
+```
+So there are 70 countries whose largest residual is greater 2, and we get the year, which is worth further investigating, for these countries.
