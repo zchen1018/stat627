@@ -1,0 +1,85 @@
+### Homework3, Stat 627
+### Zhuangye Chen
+```{r setup}
+# Load the packages
+suppressPackageStartupMessages(library(plyr))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(stringr))
+```
+
+#### Loading dirty Gapminder
+```{r read in data}
+gapminder1 <- read.delim("https://raw.githubusercontent.com/STAT545-UBC/STAT545-UBC.github.io/master/gapminderDataFiveYear_dirty.txt", strip.white = FALSE)
+gapminder2 <- read.delim("https://raw.githubusercontent.com/STAT545-UBC/STAT545-UBC.github.io/master/gapminderDataFiveYear_dirty.txt", strip.white = TRUE, sep = "\t")
+str(gapminder1)
+str(gapminder2)
+sapply(1:dim(gapminder1)[2], function(x) identical(gapminder1[, x], gapminder2[, x]))
+```
+It turns out that the first 4 columns of these two data frames are the same while the last column is not (151 levels in gapminder1 but 148 levels in gapminder2). Now let's take a closer look at it.
+```{r last col}
+sum(unique(gapminder2$region) %in% unique(gapminder1$region))
+# This means that every level of region in gapminder2 exists in gapminder1.
+# Now we'll see which levels are in gapmider1 but not gapminder2
+unique(gapminder1$region)[!unique(gapminder1$region) %in% unique(gapminder2$region)]
+```
+Since the paramter *strip.white* is used to allow the stripping of leading and trailing white space from unquoted character fields. It's most likely that when *strip.white = FALSE*, the white space leading or trailing the above three levels is not trimmed and thus we have these 3 extra levels in gapminder1. And we will be using gapminder2 from now on.
+
+#### Splitting or merging
+The continent and country are both in the field *region*. We will split them so that each column only contains one conceptual variable.
+```{r split or merge}
+region_split <- str_split_fixed(as.character(gapminder2$region), pattern = "_", n = 2)
+gapminder2 <- gapminder2 %>% mutate(continent = region_split[, 1], country = region_split[, 2]) %>% select(-region)
+head(gapminder2)
+```
+
+#### Missing values
+Run *table()* function to character column and *is.na()* function to numeric column to see if everything looks good.
+```{r missing values}
+# For all numeric columns
+anyNA(gapminder2[, sapply(gapminder2, FUN = is.numeric)])
+# For all character columns
+table(gapminder2$continent)
+# If there is any empty string in the field country
+table(gapminder2$country == "")
+# Also, we can find those countries of frequency not equal to 12
+table(gapminder2$country)[table(gapminder2$country) != 12]
+```
+There is missing value (empty string) in field *continent* but not in *country*.
+
+```{r fill the missing value}
+gapminder2 %>% filter(continent == "")
+# Canada is from Americas, add this to the continent column
+gapminder2[gapminder2$continent == "", "continent"] <- "Americas"
+gapminder2 %>% filter(country == "Canada")
+```
+
+#### Inconsistent capitalization and spelling
+```{r spelling}
+# Those countries of frequency not equal to 12
+table(gapminder2$country)[table(gapminder2$country) != 12]
+# Get names for these country for capitalization
+names_to_change <- names(table(gapminder2$country)[table(gapminder2$country) != 12])
+gapminder2$country[gapminder2$country %in% names_to_change] <- gapminder2$country[gapminder2$country %in% names_to_change] %>% gsub("\\b([a-z])", "\\U\\1", ., perl = TRUE)
+# Let's see what is still there 
+table(gapminder2$country)[table(gapminder2$country) != 12]
+names_to_change <- names(table(gapminder2$country)[table(gapminder2$country) != 12])
+gapminder2$country[gapminder2$country %in% names_to_change] <- 
+gapminder2$country[gapminder2$country %in% names_to_change] %>% gsub("(Cote )(.*)", "\\1d'Ivoire", .)
+
+table(gapminder2$country)[table(gapminder2$country) != 12]
+# At this point, it seems that manually changing the name is the fastest way 
+names_to_change <- names(table(gapminder2$country)[table(gapminder2$country) != 12])
+gapminder2$country[gapminder2$country %in% names_to_change] <- "Congo, Dem. Rep."
+table(gapminder2$country)[table(gapminder2$country) != 12]
+```
+Now every country is of requency 12.
+
+
+#### Final check
+```{r final check}
+gapminder_clean <- read.delim("https://raw.githubusercontent.com/STAT545-UBC/STAT545-UBC.github.io/master/gapminderDataFiveYear.txt", colClasses = c("character", "integer", "numeric", "character", "numeric", "numeric"))
+# Swap the columns in gapminder2 and compare
+gapminder2 <- gapminder2[, names(gapminder_clean)]
+identical(gapminder2, gapminder_clean)
+```
+Data cleaning completed!

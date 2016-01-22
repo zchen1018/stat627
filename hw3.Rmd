@@ -1,0 +1,137 @@
+### Homework3, Stat 627
+### Zhuangye Chen
+```{r setup}
+# Load the packages and read in the data
+suppressPackageStartupMessages(library(plyr))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(tidyr))
+gapminder <- read.delim("http://www.stat.ubc.ca/~jenny/notOcto/STAT545A/examples/gapminder/data/gapminderDataFiveYear.txt")
+str(gapminder)
+table(gapminder$continent)
+```
+
+###Factor management
+*Reorder a factor in a principled way based on the data and demonstrate the effect in arranged data and in figures.*
+
+##### Drop Oceania.
+```{r dropOceania}
+# remove observations associated with the continent of Oceania
+gapminder_noOcn <- gapminder %>% filter(continent != "Oceania")
+str(gapminder_noOcn)
+table(gapminder_noOcn$continent)
+gapminder_noOcn %>% filter(year == 1952) %>% ggplot(aes(x = log(pop), y=lifeExp, colour = continent)) + geom_point(size = 2)
+```
+
+Note that even we remove data (24 rows in total) of Oceania, there are still 5 levels of the "continent". However, ggplot2 is able to detect the "empty" level of factor and not to include it in the legend of the plot.
+
+Now use droplevels() to remove unused factor levels.
+```{r dropLevel}
+gapminder_noOcn <- gapminder_noOcn %>% droplevels()
+str(gapminder_noOcn)
+table(gapminder_noOcn$continent)
+```
+
+##### Reorder the levels
+Use the funtion from Homework2: Fit a linear regression of life expectancy on year for each year, find the largest standard residual of the fit. Return the year and the residual if the residual is greater than 2, return NULL if not.
+```{r OutlierYear}
+bigRes <- function(data, offset = 1952, threshold = 2) {
+  lmfit <- lm(lifeExp ~ I(year - offset), data)
+  absRes <- abs(rstandard(lmfit))
+  if (max(absRes) > threshold) {
+    return(c(data$year[which.max(absRes)], max(absRes)))
+  } else {
+    return(NULL)
+  }
+}
+countryOutlierYear <- ddply(gapminder_noOcn, ~ country + continent, bigRes)
+names(countryOutlierYear)[2:4] <- c("continent", "year", "res")
+str(countryOutlierYear)
+```
+
+```{r arrange(), fig.height=9, fig.align= 'center'}
+# Multiple plot function
+# source: http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+p1 <- ggplot(countryOutlierYear, aes(x = res, y = country)) + geom_point()
+# Try arrange() to reorder the country
+arrangedCountryOY <- arrange(countryOutlierYear, res, country)
+head(arrangedCountryOY)
+p2 <- ggplot(arrangedCountryOY, aes(x = res, y = country)) + geom_point()
+multiplot(p1, p2, cols = 2)
+```
+
+Merely arranging the data has no effect a figure. Now try using reorder() to reorder the country.
+
+```{r reorder(), fig.height=9, fig.align= 'center'}
+p3 <- ggplot(countryOutlierYear, aes(x = res, y = reorder(country, res))) + geom_point()
+multiplot(p1, p3, cols = 2)
+```
+
+### Visualization design
+*Remake at least one previously made figure, in light of recent coverage of visualization design principles.*
+
+Although the above figure has reordered the country according to res and plot the figure in a more effective way, there are still several aspects that we can make improvement based on visualization design principles. First, the axis is not well named. Second, the plot is too long to look at, we may want to highlight the continents we are interested in or even ignore other continents. The following function provide such improvement.
+```{r VisPrin, fig.align= 'center', fig.height=9}
+# continent: the continent we are interested in.
+# ignore: if TRUE, only plot data from the specific continent, if FALSE, highlight data from that continent
+VisImprove <- function(data, cont, ignore = FALSE) {
+  stopifnot(cont %in% data$continent)
+  if (ignore) {
+    tempDt <- data %>% filter(continent == cont)
+    p <- ggplot(tempDt, aes(x = res, y = reorder(country, res))) + geom_point() + xlab("Biggest Residual from Linear Regression over Years") + ylab("Country")
+  } else {
+    new_continent <- as.character(countryOutlierYear$continent)
+    new_continent[new_continent != cont] = "Other"
+    data["continent"] <- factor(new_continent)
+    p <- ggplot(data, aes(x = res, y = reorder(country, res), colour = continent)) + geom_point() + xlab("Biggest Residual from Linear Regression Over Years") + ylab("Country") + scale_colour_manual(values = c("red", "black"))
+  }
+  return(p)
+}
+VisImprove(countryOutlierYear, "Asia", FALSE)
+```
+```{r last, fig.align='center'}
+VisImprove(countryOutlierYear, "Europe", TRUE)
+```
